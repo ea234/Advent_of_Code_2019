@@ -312,6 +312,7 @@ import * as readline from 'readline';
  * 
  */
 
+
 const OP_CODE_HALT      : number = 99;
 const OP_CODE_ADD       : number =  1;
 const OP_CODE_MULTIPLY  : number =  2;
@@ -322,8 +323,8 @@ const OP_CODE_JMP_FALSE : number =  6;
 const OP_CODE_IF_LESS   : number =  7;
 const OP_CODE_IF_EQUAL  : number =  8;
 
-const POSITION_MODE     : number = 0;
-const IMMEDIATE_MODE    : number = 1;
+const POSITION_MODE     : number =  0;
+const IMMEDIATE_MODE    : number =  1;
 
 
 function wl( pString : string ) // wl = short for "writeLog"
@@ -349,17 +350,34 @@ function calcIntCode( pIntCodePrg : number[], pInputValue : number, pNoun : numb
 {
     let int_code_prg : number[] = pIntCodePrg.slice();
 
-    let prg_length   : number = pIntCodePrg.length;
+    let prg_length   : number   = pIntCodePrg.length;
 
     if ( pNoun >= 0 ) int_code_prg[ 1 ] = pNoun;
     if ( pVerb >= 0 ) int_code_prg[ 2 ] = pVerb;
 
-    let max_round           : number = 600_000;
+    let max_round           : number = 10_000;
     let round_nr            : number = 0;
     let instruction_pointer : number = 0;
     let last_out_value      : number = 0;
 
     let out_put_buf         : string = "";
+
+    const getOpParameter = ( pOpParamNumber : number ) : number => 
+    {
+        return int_code_prg[ instruction_pointer + pOpParamNumber ]! ?? 0;
+    };
+
+    const getValue = ( pParameterMode: number, pOpParameter: number ) : number => 
+    {
+        switch ( pParameterMode ) 
+        {
+            case POSITION_MODE  : return int_code_prg[ pOpParameter ]!;
+
+            case IMMEDIATE_MODE : return pOpParameter;
+
+            default: throw new Error(`Unknown parameter mode ${pParameterMode}`);
+        }
+    };
 
     while ( ( int_code_prg[ instruction_pointer ]! !== OP_CODE_HALT ) && ( round_nr < max_round ) )
     {
@@ -376,15 +394,16 @@ function calcIntCode( pIntCodePrg : number[], pInputValue : number, pNoun : numb
 
         let inst_str : string = (( param_mode_p1 === IMMEDIATE_MODE ) ? "I" : "P" ) + (( param_mode_p2 === IMMEDIATE_MODE ) ? "I" : "P" )
 
+        let parameter_1 : number = getOpParameter( 1 );
+        let parameter_2 : number = getOpParameter( 2 );
+        let parameter_3 : number = getOpParameter( 3 );
+
+        let var_a : number = getValue( param_mode_p1, parameter_1 );
+        let var_b : number = getValue( param_mode_p2, parameter_2 );
+
+
         if ( op_code === OP_CODE_ADD )
         {
-            let parameter_1 : number = int_code_prg[ instruction_pointer + 1 ]!;
-            let parameter_2 : number = int_code_prg[ instruction_pointer + 2 ]!;
-            let parameter_3 = int_code_prg[ instruction_pointer + 3 ]!;
-
-            let var_a : number = ( param_mode_p1 === IMMEDIATE_MODE ) ? parameter_1 : int_code_prg[ parameter_1 ]!;
-            let var_b : number = ( param_mode_p2 === IMMEDIATE_MODE ) ? parameter_2 : int_code_prg[ parameter_2 ]!;
-
             result = var_a + var_b;
 
             if ( pKnzDebug )
@@ -398,13 +417,6 @@ function calcIntCode( pIntCodePrg : number[], pInputValue : number, pNoun : numb
         }
         else if ( op_code === OP_CODE_MULTIPLY )
         {
-            let parameter_1 : number = int_code_prg[ instruction_pointer + 1 ]!;
-            let parameter_2 : number = int_code_prg[ instruction_pointer + 2 ]!;
-            let parameter_3 = int_code_prg[ instruction_pointer + 3 ]!;
-
-            let var_a : number = ( param_mode_p1 === IMMEDIATE_MODE ) ? parameter_1 : int_code_prg[ parameter_1 ]!;
-            let var_b : number = ( param_mode_p2 === IMMEDIATE_MODE ) ? parameter_2 : int_code_prg[ parameter_2 ]!;
-
             result = var_a * var_b;
 
             if ( pKnzDebug )
@@ -418,9 +430,7 @@ function calcIntCode( pIntCodePrg : number[], pInputValue : number, pNoun : numb
         }
         else if ( op_code === OP_CODE_INPUT )
         {
-            let parameter_1 : number = int_code_prg[ instruction_pointer + 1 ]!;
-
-            let var_a : number = pInputValue;// ( param_m1 === IMMEDIATE_MODE ) ? parameter_1 : int_code_prg[ parameter_1 ]!;
+            let var_a : number = pInputValue;
 
             result = var_a;
 
@@ -435,10 +445,6 @@ function calcIntCode( pIntCodePrg : number[], pInputValue : number, pNoun : numb
         }
         else if ( op_code === OP_CODE_OUTPUT )
         {
-            let parameter_1 : number = int_code_prg[ instruction_pointer + 1 ]!;
-
-            let var_a : number = ( param_mode_p1 === IMMEDIATE_MODE ) ? parameter_1 : int_code_prg[ parameter_1 ]!;
-
             result = var_a;
 
             if ( pKnzDebug )
@@ -459,20 +465,7 @@ function calcIntCode( pIntCodePrg : number[], pInputValue : number, pNoun : numb
              * it sets the instruction pointer to the value from the second parameter. 
              * Otherwise, it does nothing.
              */
-            let parameter_1 : number = int_code_prg[ instruction_pointer + 1 ]!;
-            let parameter_2 : number = int_code_prg[ instruction_pointer + 2 ]!;
-
-            let var_a : number = ( param_mode_p1 === IMMEDIATE_MODE ) ? parameter_1 : int_code_prg[ parameter_1 ]!;
-            let var_b : number = ( param_mode_p2 === IMMEDIATE_MODE ) ? parameter_2 : int_code_prg[ parameter_2 ]!;
-
-            if ( var_a !== 0 )
-            {
-                result = var_b;
-            }
-            else
-            {
-                result = 0;
-            }
+            result = ( var_a !== 0 ) ? var_b : 0;
 
             if ( pKnzDebug )
             {
@@ -497,20 +490,7 @@ function calcIntCode( pIntCodePrg : number[], pInputValue : number, pNoun : numb
              * instruction pointer to the value from the second parameter. 
              * Otherwise, it does nothing.
              */
-            let parameter_1 : number = int_code_prg[ instruction_pointer + 1 ]!;
-            let parameter_2 : number = int_code_prg[ instruction_pointer + 2 ]!;
-
-            let var_a : number = ( param_mode_p1 === IMMEDIATE_MODE ) ? parameter_1 : int_code_prg[ parameter_1 ]!;
-            let var_b : number = ( param_mode_p2 === IMMEDIATE_MODE ) ? parameter_2 : int_code_prg[ parameter_2 ]!;
-
-            if ( var_a === 0 )
-            {
-                result = var_b;
-            }
-            else
-            {
-                result = 0;
-            }
+            result = ( var_a === 0 ) ? var_b : 0;
 
             if ( pKnzDebug )
             {
@@ -527,7 +507,7 @@ function calcIntCode( pIntCodePrg : number[], pInputValue : number, pNoun : numb
             {
                 inc_ip = 3;
             }
-        }
+        }        
         else if ( op_code === OP_CODE_IF_LESS )
         {
             /*
@@ -535,13 +515,6 @@ function calcIntCode( pIntCodePrg : number[], pInputValue : number, pNoun : numb
              * the second parameter, it stores 1 in the position given by the third parameter. 
              * Otherwise, it stores 0.
              */
-            let parameter_1 : number = int_code_prg[ instruction_pointer + 1 ]!;
-            let parameter_2 : number = int_code_prg[ instruction_pointer + 2 ]!;
-            let parameter_3 = int_code_prg[ instruction_pointer + 3 ]!;
-
-            let var_a : number = ( param_mode_p1 === IMMEDIATE_MODE ) ? parameter_1 : int_code_prg[ parameter_1 ]!;
-            let var_b : number = ( param_mode_p2 === IMMEDIATE_MODE ) ? parameter_2 : int_code_prg[ parameter_2 ]!;
-
             result = var_a < var_b ? 1 : 0;
 
             if ( pKnzDebug )
@@ -559,13 +532,6 @@ function calcIntCode( pIntCodePrg : number[], pInputValue : number, pNoun : numb
              * Opcode 8 is equals: if the first parameter is equal to the second parameter, 
              * it stores 1 in the position given by the third parameter. Otherwise, it stores 0.
              */
-            let parameter_1 : number = int_code_prg[ instruction_pointer + 1 ]!;
-            let parameter_2 : number = int_code_prg[ instruction_pointer + 2 ]!;
-            let parameter_3 = int_code_prg[ instruction_pointer + 3 ]!;
-
-            let var_a : number = ( param_mode_p1 === IMMEDIATE_MODE ) ? parameter_1 : int_code_prg[ parameter_1 ]!;
-            let var_b : number = ( param_mode_p2 === IMMEDIATE_MODE ) ? parameter_2 : int_code_prg[ parameter_2 ]!;
-
             result = var_a === var_b ? 1 : 0;
 
             if ( pKnzDebug )
@@ -688,4 +654,3 @@ checkReaddatei();
 
 wl( "" )
 wl( "Day 05 - End " );
-
